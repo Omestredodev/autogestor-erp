@@ -1,0 +1,8 @@
+.env
+*.log
+*.dump
+*.backup
+*.sql.gz
+.DS_Store
+node_modules/
+.tmp/

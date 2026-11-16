@@ -1,0 +1,42 @@
+digraph PecaAquiDB {
+  graph [rankdir=LR, bgcolor="white", pad="0.25", nodesep="0.55", ranksep="1.2", fontname="Arial", fontsize=18, label="Peça-Aqui | Modelo físico PostgreSQL — visão por módulos", labelloc=t];
+  node [shape=record, style="rounded,filled", fillcolor="#EFF6FF", color="#64748B", fontname="Arial", fontsize=12];
+  edge [color="#64748B", arrowsize=.7];
+  subgraph cluster_cat { label="Catálogo"; color="#93C5FD";
+    products [label="products | produto e preços"];
+    brands [label="brands / categories / units"];
+    vehicles [label="vehicles / product_applications"];
+    eq [label="product_equivalences"];
+    brands -> products; vehicles -> products [dir=both]; eq -> products;
+  }
+  subgraph cluster_stock { label="Compras e Estoque"; color="#6EE7B7";
+    suppliers [label="suppliers"];
+    purchases [label="purchases / purchase_items"];
+    stock_movements [label="stock_movements | ledger imutável"];
+    stock_balances [label="stock_balances | projeção"];
+    suppliers -> purchases; purchases -> stock_movements; stock_movements -> stock_balances;
+  }
+  subgraph cluster_sale { label="Vendas e Pós-venda"; color="#FCD34D";
+    customers [label="customers"];
+    sales [label="sales / sale_items"];
+    returns [label="returns / return_items"];
+    cancel [label="sale_cancellations"];
+    customers -> sales; sales -> returns; sales -> cancel;
+  }
+  subgraph cluster_fin { label="Financeiro"; color="#F9A8D4";
+    closings [label="closings / closing_items"];
+    payments [label="payments / refunds"];
+    sales -> closings; sales -> payments; closings -> payments;
+  }
+  subgraph cluster_access { label="Acesso e Produtividade"; color="#C4B5FD";
+    users [label="users / profiles / permissions"];
+    reminders [label="reminders / reminder_recipients"];
+    audit [label="audit_events"];
+    users -> reminders; users -> audit;
+  }
+  products -> purchases [style=dashed];
+  products -> sales [style=dashed];
+  sales -> stock_movements [style=dashed];
+  returns -> stock_movements [style=dashed];
+  cancel -> stock_movements [style=dashed];
+}
