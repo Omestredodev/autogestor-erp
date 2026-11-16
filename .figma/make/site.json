@@ -1,0 +1,10 @@
+{
+  "description": "Gerencie produtos, estoque, vendas, compras e finanças em um só lugar com ferramentas integradas para agilizar a operação de lojas de autopeças.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
