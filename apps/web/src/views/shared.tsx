@@ -1,0 +1,11 @@
+import React,{useState} from 'react';
+import {useApi} from '../controllers/ApiProvider';
+import type {Row} from '../models/types';
+export function Panel({title,children,actions}:{title:string;children:React.ReactNode;actions?:React.ReactNode}){return <section className="panel"><div className="panel-head"><h2>{title}</h2>{actions}</div>{children}</section>}
+export function Field({label,value,onChange,type='text',options,placeholder,required}:{label:string;value:any;onChange:(v:any)=>void;type?:string;options?:{value:string|number;label:string}[];placeholder?:string;required?:boolean}){
+ return <label className="field"><span>{label}{required?' *':''}</span>{options?<select value={value??''} onChange={e=>onChange(e.target.value)} required={required}><option value="">Selecione…</option>{options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>:<input type={type} value={value??''} onChange={e=>onChange(e.target.value)} placeholder={placeholder} required={required}/>}</label>}
+export function Form({title,onSubmit,children}:{title:string;onSubmit:()=>Promise<any>;children:React.ReactNode}){
+ const {busy}=useApi();const [err,setErr]=useState('');return <form className="form" onSubmit={e=>{e.preventDefault();setErr('');onSubmit().catch(x=>setErr(String(x.message??x)))}}><h3>{title}</h3><div className="form-grid">{children}</div>{err&&<p className="form-error">{err}</p>}<button className="button primary" disabled={busy} type="submit">{busy?'Gravando…':'Confirmar operação'}</button></form>
+}
+export function Table({headers,rows,onSelect}:{headers:{key:string;label:string;format?:(x:any,r:Row)=>React.ReactNode}[];rows:Row[];onSelect?:(x:Row)=>void}){return <div className="table-scroll"><table><thead><tr>{headers.map(h=><th key={h.key}>{h.label}</th>)}</tr></thead><tbody>{rows.length===0?<tr><td colSpan={headers.length} className="empty">Nenhum registro encontrado.</td></tr>:rows.map((r,i)=><tr key={r.id??r.sale_id??r.product_id??i} className={onSelect?'clickable':''} onClick={()=>onSelect?.(r)}>{headers.map(h=><td key={h.key}>{h.format?h.format(r[h.key],r):String(r[h.key]??'—')}</td>)}</tr>)}</tbody></table></div>}
+export const options=(rows:Row[],key='name')=>rows.map(x=>({value:String(x.id??x.product_id),label:String(x[key]??x.description)}));
