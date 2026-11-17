@@ -71,7 +71,13 @@ BEGIN
  SELECT id INTO v_customer FROM customers WHERE document='00000000001';
  SELECT ARRAY(SELECT id FROM sales WHERE notes IN ('Ordem semanal A','Ordem semanal B') ORDER BY id)
  INTO v_sale_ids;
- v_closing:=create_closing(v_customer,v_actor,CURRENT_DATE,CURRENT_DATE,v_sale_ids);
+ v_closing:=create_closing(
+    v_customer,
+    v_actor,
+    (SELECT MIN(created_at::date) FROM sales WHERE id=ANY(v_sale_ids)),
+    (SELECT MAX(created_at::date) FROM sales WHERE id=ANY(v_sale_ids)),
+    v_sale_ids
+  );
  IF (SELECT total FROM v_closing_balances WHERE closing_id=v_closing)<>244 THEN
   RAISE EXCEPTION 'Teste falhou: total do fechamento'; END IF;
  v_paid:=register_payment(v_actor,100,'PIX',NULL,v_closing,'TEST-PAID-1');

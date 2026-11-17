@@ -9,7 +9,12 @@ async function bootstrap(){
  if(!process.env.DATABASE_URL) throw new Error('DATABASE_URL ausente');
  const app=await NestFactory.create(AppModule,{rawBody:false});
  app.setGlobalPrefix('api/v1');
- app.enableCors({origin:(process.env.CORS_ORIGIN??'http://localhost:5173').split(',').map(x=>x.trim()),credentials:false});
+ const configuredOrigins=(process.env.CORS_ORIGIN??'http://localhost:5173').split(',').map(x=>x.trim()).filter(Boolean);
+ // Dev: o Vite usa 127.0.0.1:5173, mas muitos usuários abrem localhost:5173.
+ // Em produção, somente as origens explicitamente configuradas serão permitidas.
+ const allowedOrigins=new Set(process.env.NODE_ENV==='production' ? configuredOrigins :
+   [...configuredOrigins,'http://127.0.0.1:5173','http://localhost:5173']);
+ app.enableCors({origin:Array.from(allowedOrigins),credentials:false});
  await app.listen(Number(process.env.PORT??3001),'127.0.0.1');
  console.log(`Peça-Aqui API em http://localhost:${process.env.PORT??3001}/api/v1`);
 }

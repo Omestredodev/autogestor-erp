@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import {useApi} from '../../controllers/ApiProvider';
 import {useRemote} from '../../controllers/useRemote';
 import {date,type Row} from '../../models/types';
@@ -14,11 +14,61 @@ export function Audit(){const {can}=useApi();const [entity,setEntity]=useState('
  if(!can('AUDIT_READ'))return <p>Sem permissão para auditoria.</p>;
  return <Panel title="Auditoria de alterações" actions={<input value={entity} onChange={e=>setEntity(e.target.value)} placeholder="Filtrar entidade: sales, products…"/>}><Table rows={data} headers={[{key:'id',label:'Evento'},{key:'happened_at',label:'Quando',format:date},{key:'actor_name',label:'Usuário'},{key:'entity',label:'Entidade'},{key:'record_id',label:'ID'},{key:'action',label:'Operação'}]}/></Panel>;
 }
-export function Admin(){const {request,user}=useApi();const {data:users}=useRemote<Row[]>('/users',[]),{data:profiles}=useRemote<Row[]>('/profiles',[]);
- const [f,setF]=useState<Row>({name:'',email:'',password:'',profile_id:''});const set=(k:string)=>(v:any)=>setF(x=>({...x,[k]:v}));
+export function Admin(){
+ const {request,user}=useApi();
+ const {data:users,refresh:refreshUsers}=useRemote<Row[]>('/users',[]),{data:profiles}=useRemote<Row[]>('/profiles',[]);
+ // Recarrega solicitações criadas em outra guia. Também há botão de atualização manual.
+ useEffect(()=>{const id=window.setInterval(()=>refreshUsers(),8000);return()=>window.clearInterval(id)},[]);
+ const [pendingProfiles,setPendingProfiles]=useState<Record<number,string>>({});
+ const [f,setF]=useState<Row>({name:'',email:'',profile_id:''});
+ const [editing,setEditing]=useState<Row|null>(null);
+ const [credential,setCredential]=useState<{email:string;password:string}|null>(null);
+ const [actionError,setActionError]=useState('');
+ const set=(k:string)=>(v:any)=>setF(x=>({...x,[k]:v}));
  if(user?.profile!=='ADMIN')return <p>Apenas administradores podem gerenciar usuários.</p>;
- return <><Panel title="Usuários e perfis"><Table rows={users} headers={[{key:'id',label:'ID'},{key:'name',label:'Nome'},{key:'email',label:'Email'},{key:'profile',label:'Perfil'},{key:'active',label:'Ativo',format:x=>x?'Sim':'Não'}]}/></Panel>
- <Form title="Cadastrar usuário com senha protegida" onSubmit={async()=>{await request('/users','POST',{name:f.name,email:f.email,password:f.password,profile_id:Number(f.profile_id)});setF({name:'',email:'',password:'',profile_id:''})}}>
- <Field label="Nome" value={f.name} onChange={set('name')} required/><Field label="Email" type="email" value={f.email} onChange={set('email')} required/><Field label="Senha (mín. 12 caracteres)" type="password" value={f.password} onChange={set('password')} required/><Field label="Perfil" value={f.profile_id} onChange={set('profile_id')} options={options(profiles)} required/>
- </Form></>;
+ async function run(action:()=>Promise<any>){setCredential(null);setActionError('');try{return await action()}catch(e){setActionError(e instanceof Error?e.message:String(e));return null}}
+ const status=(u:Row)=>u.deleted_at?'Excluído':u.approval_status==='PENDING'?'Pendente':u.active?'Ativo':'Inativo';
+ const optionsList=options(profiles);
+ const approvePending=(u:Row)=>{const profile_id=Number(pendingProfiles[Number(u.id)]);
+  if(!Number.isSafeInteger(profile_id)||profile_id<1){setActionError(`Escolha o perfil de ${u.name} antes da aprovação.`);return;}
+  run(()=>request(`/users/${u.id}/approve`,'POST',{profile_id}));
+ };
+ const actions=(_v:any,u:Row)=><div className="admin-actions">
+  {!u.deleted_at&&u.approval_status==='PENDING'&&<>
+   <select aria-label={`Perfil para aprovar ${u.name}`} value={pendingProfiles[Number(u.id)]??''}
+    onChange={e=>setPendingProfiles(x=>({...x,[Number(u.id)]:e.target.value}))}>
+    <option value="">Escolha o perfil…</option>
+    {optionsList.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+   </select>
+   <button disabled={!pendingProfiles[Number(u.id)]} onClick={()=>approvePending(u)}>Aprovar com perfil</button>
+  </>}
+  {!u.deleted_at&&<button onClick={()=>{setEditing({...u});setCredential(null)}}>Editar</button>}
+  {!u.deleted_at&&u.approval_status==='APPROVED'&&u.active&&Number(u.id)!==user?.id&&<button onClick={()=>{if(window.confirm(`Desativar ${u.name}? Ele perderá acesso imediatamente.`))run(()=>request(`/users/${u.id}/deactivate`,'POST',{}))}}>Desativar</button>}
+  {!u.deleted_at&&u.approval_status==='APPROVED'&&!u.active&&<button onClick={()=>run(()=>request(`/users/${u.id}/reactivate`,'POST',{}))}>Reativar</button>}
+  {!u.deleted_at&&u.approval_status==='APPROVED'&&<button onClick={()=>run(async()=>{const r=await request<{temporaryPassword:string;email:string}>(`/users/${u.id}/reset-password`,'POST',{});setCredential({email:r.email,password:r.temporaryPassword});return r})}>Redefinir senha</button>}
+  {!u.deleted_at&&Number(u.id)!==user?.id&&<button className="danger-action" onClick={()=>{if(window.confirm(`Excluir ${u.name}? Essa ação é lógica e preserva o histórico de vendas e auditoria. A conta não poderá acessar o sistema.`))run(()=>request(`/users/${u.id}`,'DELETE'))}}>Excluir</button>}
+ </div>;
+ return <>
+ <Panel title="Administração de contas e aprovações" actions={<div className="admin-toolbar">
+   <button className="button secondary" type="button" onClick={refreshUsers}>Atualizar solicitações</button>
+   <button className="button secondary" type="button" onClick={()=>window.open(window.location.origin+'/?cadastro=1','_blank','noopener,noreferrer')}>Abrir cadastro em outra aba</button>
+  </div>}><p className="disclaimer" style={{margin:'14px 20px'}}>Novos cadastros ficam pendentes. Selecione o perfil no próprio cadastro antes de aprovar. A lista é atualizada a cada 8 segundos; você também pode clicar em Atualizar solicitações. Desativar bloqueia temporariamente; excluir preserva o histórico.</p>
+ {actionError&&<p role="alert" className="form-error" style={{margin:'12px 20px'}}>{actionError}</p>}
+ <Table rows={users} headers={[{key:'id',label:'ID'},{key:'name',label:'Nome'},{key:'email',label:'E-mail'},{key:'profile',label:'Perfil'},{key:'approval_status',label:'Situação',format:(_v,u)=><span className={'status-pill '+(u.deleted_at?'deleted':u.approval_status==='PENDING'?'pending':u.active?'approved':'')}>{status(u)}</span>},{key:'must_change_password',label:'Troca pendente',format:v=>v?'Sim':'Não'},{key:'id',label:'Ações',format:actions}]}/>
+ </Panel>
+ {credential&&<div className="credential-note" role="status"><strong>Senha temporária individual de {credential.email}</strong>
+ <p>Copie agora e entregue ao titular por um canal seguro. Ela será exigida no próximo login, e esta tela não a exibirá novamente.</p>
+ <code>{credential.password}</code><button className="button secondary" onClick={()=>setCredential(null)}>Ocultar senha</button></div>}
+ {editing&&<Panel title={'Editar usuário: '+editing.name}><form className="form" onSubmit={e=>{e.preventDefault();run(async()=>{await request(`/users/${editing.id}`,'PATCH',{name:editing.name,email:editing.email,profile_id:Number(editing.profile_id)});setEditing(null)})}}>
+ <div className="form-grid"><Field label="Nome" value={editing.name} onChange={v=>setEditing(x=>x?{...x,name:v}:x)} required/>
+ <Field label="E-mail" value={editing.email} type="email" onChange={v=>setEditing(x=>x?{...x,email:v}:x)} required/>
+ <Field label="Perfil" value={String(editing.profile_id)} options={optionsList} onChange={v=>setEditing(x=>x?{...x,profile_id:v}:x)} required/></div>
+ <button className="button primary" type="submit">Salvar mudanças</button> <button className="button secondary" type="button" onClick={()=>setEditing(null)}>Cancelar</button></form></Panel>}
+ <Form title="Criar conta pelo administrador" onSubmit={async()=>{setCredential(null);const created=await request<{email:string;temporaryPassword:string|null}>('/users','POST',{name:f.name,email:f.email,profile_id:Number(f.profile_id)});
+  if(created.temporaryPassword)setCredential({email:created.email,password:created.temporaryPassword});setF({name:'',email:'',profile_id:''})}}>
+ <Field label="Nome" value={f.name} onChange={set('name')} required/><Field label="E-mail" type="email" value={f.email} onChange={set('email')} required/>
+ <Field label="Perfil" value={f.profile_id} onChange={set('profile_id')} options={optionsList} required/>
+ <p className="disclaimer">O sistema gera senha temporária única para esta conta e obriga a troca no primeiro acesso. Não use a mesma senha para usuários diferentes.</p>
+ </Form>
+ </>;
 }
