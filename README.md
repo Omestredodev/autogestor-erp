@@ -197,17 +197,59 @@ Acesse **http://127.0.0.1:5173**. Se surgir `Failed to fetch`, confirme a API na
 
 ## 6. Contas, perfis e aprovação
 
-O fluxo atual é:
+O Peça-Aqui distingue **usuários** de **perfis de acesso**. Cada usuário possui identidade própria (nome, e-mail e senha individual, armazenada como **hash bcrypt**) e recebe um perfil. O perfil define um conjunto de permissões associado às tabelas `profiles`, `permissions` e `profile_permissions`. A autorização efetiva é verificada no backend; ocultar menus ou botões no React não substitui essa proteção.
 
-1. A pessoa abre **Solicitar cadastro**, informa nome, e-mail e senha individual (mínimo de 12 caracteres).
-2. O backend grava a solicitação como `PENDING` e `active = FALSE`.
-3. Na tela **Administração**, o administrador escolhe **um dos quatro perfis** e aprova a solicitação.
-4. O novo usuário pode entrar com a senha escolhida. Em **Minha conta**, pode alterá-la informando a atual.
-5. O administrador pode bloquear, reativar, gerar senha temporária, editar ou **excluir logicamente** a conta, preservando referências históricas.
+### 6.1. Quatro perfis padrão
 
-Os nomes persistidos dos perfis são **`ADMIN`**, **`SELLER`**, **`STOCK`** e **`FINANCE`**. O backend consulta `profile_permissions` para autorizar operações. Esconder um botão na interface **não** substitui a verificação no servidor.
+| Perfil | Código no banco | Atuação principal no ERP |
+|---|---|---|
+| **Administrador** | `ADMIN` | Aprovar solicitações de cadastro, definir perfis, administrar contas e acompanhar a operação do sistema. |
+| **Vendedor** | `SELLER` | Consultar peças e clientes, realizar vendas e executar operações comerciais permitidas. |
+| **Estoque / Compras** | `STOCK` | Consultar saldos, acompanhar movimentações, registrar compras e realizar ajustes autorizados. |
+| **Financeiro** | `FINANCE` | Acompanhar contas a receber, fechamentos e pagamentos, conforme as permissões atribuídas. |
 
-O teste manual de cadastro em duas abas e o script [`scripts/testar_4_perfis.ps1`](scripts/testar_4_perfis.ps1) foram executados com sucesso no ambiente local informado pelo grupo. O script confirmou login dos quatro perfis e rejeição de senha incorreta com HTTP 401.
+> **Atenção:** a tabela resume responsabilidades típicas, não concede acesso automaticamente. As permissões concretas de cada ação são definidas no banco e aplicadas na API. Consulte [`Peca_Aqui_Entrega_1/database/init/04_seed.sql`](Peca_Aqui_Entrega_1/database/init/04_seed.sql), [`apps/api/src/auth/auth.ts`](apps/api/src/auth/auth.ts) e [`apps/api/src/admin/admin.ts`](apps/api/src/admin/admin.ts).
+
+### 6.2. Usuários demonstrativos para testes locais
+
+O ambiente acadêmico possui quatro contas de demonstração, uma por perfil:
+
+| Perfil | E-mail de demonstração |
+|---|---|
+| Administrador | `admin@demo.invalid` |
+| Vendedor | `vendedor@demo.invalid` |
+| Estoque / Compras | `estoque@demo.invalid` |
+| Financeiro | `financeiro@demo.invalid` |
+
+Para criar ou redefinir **somente essas quatro contas** no banco local de demonstração:
+
+```powershell
+cd "C:\Projetos\Peça-Aqui-GitHub\apps\api"
+npm run auth:seed
+```
+
+As quatro contas recebem **senhas diferentes**, com hash bcrypt armazenado no PostgreSQL. O comando também as deixa aprovadas para demonstração. **Executá-lo novamente redefine as quatro senhas e invalida as sessões anteriores.**
+
+As senhas de teste estão documentadas em [`README_ACESSO_LOCAL.md`](README_ACESSO_LOCAL.md), juntamente com o procedimento de instalação. Elas são **públicas e exclusivas para uso local com dados fictícios**: não as reutilize para contas reais nem execute o seed demonstrativo em produção. O domínio `.invalid` é utilizado para evidenciar que esses e-mails não são caixas postais reais; o sistema não envia e-mails automaticamente nesta versão.
+
+Para verificar o login de cada perfil e a rejeição de senhas incorretas:
+
+```powershell
+cd "C:\Projetos\Peça-Aqui-GitHub"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\testar_4_perfis.ps1
+```
+
+### 6.3. Cadastro de novas pessoas e aprovação administrativa
+
+1. A pessoa acessa **Solicitar cadastro**, informa nome, e-mail e uma **senha própria** (mínimo de 12 caracteres).
+2. A API cria o usuário com estado `PENDING` e `active = FALSE`. **Não existe login autorizado antes da aprovação.**
+3. O administrador, autenticado em **Administração**, visualiza a solicitação, **escolhe o perfil** (`ADMIN`, `SELLER`, `STOCK` ou `FINANCE`) e aprova.
+4. O novo usuário atualiza a página de acesso, informa seu e-mail e a **mesma senha definida no cadastro** e pode entrar com as permissões do perfil escolhido.
+5. Em **Minha conta**, o usuário pode trocar a senha informando a anterior. O administrador pode editar, bloquear, reativar, redefinir a senha temporariamente ou **excluir logicamente** uma conta, preservando vínculos de vendas e auditoria.
+
+**Exemplo com duas abas do navegador:** mantenha a sessão de administrador na aba A; na aba B, solicite um cadastro fictício. Na aba A, clique em **Atualizar solicitações** (ou aguarde a atualização automática), atribua o perfil `SELLER` e aprove. Na aba B, tente fazer login novamente: o mesmo e-mail/senha deverá funcionar após a aprovação. Antes dela, a API deve recusar o acesso.
+
+Para referências de implementação, consulte [`apps/web/src/views/pages/Admin.tsx`](apps/web/src/views/pages/Admin.tsx), [`apps/web/src/views/pages/Account.tsx`](apps/web/src/views/pages/Account.tsx), [`apps/api/src/auth/auth.ts`](apps/api/src/auth/auth.ts) e [`docs/entrega4/ROTEIRO_DE_TESTES_ACESSO.md`](docs/entrega4/ROTEIRO_DE_TESTES_ACESSO.md).
 
 ## 7. Comandos de validação
 
